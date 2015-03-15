@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Push Demo</title>
+<link rel="manifest" href="manifest.json">
+</head>
+<body>
+<button class="js-push-button" disabled> 
+    Enable Push Messages  
+</button>
+<script>
+    var isPushEnabled = false;
+    var pushButton = document.querySelector('.js-push-button');
+    
+    window.addEventListener('load', function() {
+        pushButton.addEventListener('click', function() {
+            if (isPushEnabled) {
+                unsubscribe();
+            } else {
+                subscribe();
+            }
+        });
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(initialiseState);
+        } else {
+            console.warn('Service workers aren\'t supported in this browser.');
+        }
+        
+    });
+    
+    function initialiseState() {
+        if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
+            console.warn('Notifications aren\'t supported.');
+            return;
+        }
+        
+        if (Notification.permission === 'denied') {
+            console.warn('The user has blocked notifications.');
+            return;
+        }
+        
+        if (!('PushManager' in window)) {
+            console.warn('Push messaging isn\'t supported.');
+            return;
+        }
+        
+        navigator.serviceWorker.ready
+            .then(function (serviceWorkerRegistration) {
+                serviceWorkerRegistration.pushManager.getSubscription()
+                    .then(function(subscription) {
+                        pushButton.disabled = false;
+                        if (!subscription) {
+                            return;
+                        }
+
+                        sendSubscriptionToServer(subscription);
+
+                        pushButton.textContent = 'Disable Push Messages';
+                        isPushEnabled = true;
+                    })
+                    .catch(function(e) {
+                        console.warn('Error during getSubscription()', e);
+                    });
+            });
+        
+    }
+    
+    function subscribe() {
+        pushButton.disabled = true;
+
+        navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+            serviceWorkerRegistration.pushManager.subscribe()
+                .then(function(subscription) {
+                    isPushEnabled = true;
+                    pushButton.textContent = 'Disable Push Messages';
+                    pushButton.disabled = false;
+
+                    return sendSubscriptionToServer(subscription);
+                })
+                .catch(function(e) {
+                    if (Notification.permission === 'denied') {
+                        console.warn('Permission for Notification is denied');
+                        pushButton.disabled = true;
+                    } else {
+                        console.error('Unable to subscribe to push', e);
+                        pushButton.disabled = true;
+                        pushButton.textContent = 'Enable Push Messages';
+                    }
+                })
+        })
+    }
+    
+    function unsubscribe() {
+      pushButton.disabled = true;
+
+      navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+        serviceWorkerRegistration.pushManager.getSubscription().then(
+            function(pushSubscription) {
+              if (!pushSubscription) {
+                isPushEnabled = false;
+                pushButton.disabled = false;
+                pushButton.textContent = 'Enable Push Messages';
+                return;
+              }
+
+              var subscriptionId = pushSubscription.subscriptionId;
+
+              pushSubscription.unsubscribe().then(function(successful) {
+                pushButton.disabled = false;
+                pushButton.textContent = 'Enable Push Messages';
+                isPushEnabled = false;
+              }).catch(function(e) {
+                console.error('Error thrown while unsbscribing from push messaging.', e);
+              });
+            });
+      });
+    }
+
+    // send subscription id to server
+    function sendSubscriptionToServer(subscription) {
+        console.log(subscription);
+    }
+</script>
+</body>
+</html>
